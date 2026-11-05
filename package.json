@@ -1,0 +1,20 @@
+{
+  "name": "talenthub-gto-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "check:php": "php apps/api/tests/requirements.php",
+    "dev:web": "npm run dev -w @talenthub/web",
+    "build:web": "npm run generate -w @talenthub/web",
+    "typecheck": "npm run typecheck -w @talenthub/web",
+    "dev:api": "php -S 127.0.0.1:8000 -t apps/api/public apps/api/router.php",
+    "test:api": "php apps/api/tests/smoke.php"
+  },
+  "engines": {
+    "node": ">=24.11.0",
+    "npm": ">=10.0.0"
+  }
+}
