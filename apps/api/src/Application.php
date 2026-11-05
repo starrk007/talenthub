@@ -1,45 +1,41 @@
 <?php
 declare(strict_types=1);
 namespace TalentHub;
-final class Application {
-    public static function handle(): void {
+
+final class Application
+{
+    public static function handle(): void
+    {
         try {
             Http::cors();
             $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-            $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
-            $jobs = [
-                [
-                    'id' => 'demo00001',
-                    'ownerId' => 'demoEmpresa',
-                    'companyName' => 'Empresa Demo',
-                    'title' => 'Practicas de Desarrollo PHP',
-                    'location' => 'Irapuato, Guanajuato',
-                    'modality' => 'HIBRIDO',
-                    'description'=> 'Aprende desarrollo backend con PHP',
-                    'status' => 'OPEN',
-                    'createdAt' => gmdate('c'),
-                ],
-            ];
-            if ($method === 'GET' && $path === '/api/v1/health') {
-                Http::json(['ok' => true, 'service' => 'talent-hub', 'version' => 'sesion-01']);
+            $path = trim(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '', '/');
+            $parts = explode('/', $path);
+            if (array_slice($parts, 0, 2) !== ['api', 'v1']) {
+                throw new ApiException('Ruta no encontrada.', 404);
             }
-            if ($method === 'GET' && $path === '/api/v1/jobs') {
-                Http::json(['data' => $jobs]);
+            $route = array_slice($parts, 2);
+            $token = Http::token();
+            if ($method === 'GET' && $route === ['health']) {
+                Http::json(['ok' => true, 'service' => 'talenthub-php', 'version' => 'sesion-02']);
             }
-            if ($method === 'GET' && preg_match('#^/api/v1/jobs/([A-Za-z0-9_-]+)$#', (string) $path, $matches)) {
-                if ($matches[1] === 'jobs[0][id]') {
-                    Http::json(['jobs' => $jobs[0]]);
-                }
-                throw new ApiException('Vacante no encontrada', 404);
+            $db = new Firestore();
+            if ($method === 'GET' && $route === ['jobs']) {
+                Http::json(['data' => $db->query('jobs', 'status', 'OPEN', $token)]);
             }
-            throw new ApiException('Ruta no encontrada', 404);
+            if ($method === 'GET' && count($route) === 2 && $route[0] === 'jobs') {
+                $job = $db->get('jobs', $route[1], $token);
+                if (!$job) throw new ApiException('Vacante no encontrada.', 404);
+                Http::json(['data' => $job]);
+            }
+            throw new ApiException('Ruta no encontrada.', 404);
         } catch (ApiException $e) {
             Http::json(['error' => $e->getMessage()], $e->httpStatus);
         } catch (\Throwable $e) {
-            Http::json(['error' => 'Error interno del servidor'], 500);
+            error_log('TalentHub API: ' . $e->getMessage());
+            Http::json(['error' => 'Error interno del servidor.'], 500);
         }
     }
 }
-
 
 ?>

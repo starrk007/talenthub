@@ -19,6 +19,7 @@ final class Config {
         if (!is_string($value) || $value === '' || str_contains($value, 'REEMPLAZAR') || $value === 'tu-proyecto') {
             throw new ApiException('Configura' . $key . ' en config/local.php', 500);
         }
+        return $value;
     }
 }
 ?>

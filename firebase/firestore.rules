@@ -1,0 +1,90 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function hasRole(role) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+    }
+    function admin() { return hasRole('ADMIN'); }
+    function hasKeys(keys) {
+      return request.resource.data.keys().hasOnly(keys)
+        && request.resource.data.keys().hasAll(keys);
+    }
+
+    match /users/{uid} {
+      allow get: if (signedIn() && request.auth.uid == uid) || admin();
+      allow list: if admin();
+      allow create: if signedIn() && request.auth.uid == uid
+        && hasKeys(['uid', 'email', 'name', 'role', 'companyName', 'university', 'createdAt'])
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 2
+        && request.resource.data.name.size() <= 100
+        && request.resource.data.role in ['STUDENT', 'COMPANY']
+        && request.resource.data.companyName is string
+        && request.resource.data.university is string
+        && request.resource.data.createdAt is string;
+      allow update, delete: if false;
+    }
+
+    match /jobs/{jobId} {
+      allow get, list: if resource.data.status == 'OPEN'
+        || (signedIn() && resource.data.ownerId == request.auth.uid)
+        || admin();
+      allow create: if hasRole('COMPANY')
+        && hasKeys(['ownerId', 'companyName', 'title', 'location', 'modality', 'description', 'status', 'createdAt'])
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.companyName == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyName
+        && request.resource.data.status == 'OPEN'
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 5
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.description is string
+        && request.resource.data.description.size() >= 20
+        && request.resource.data.description.size() <= 2500
+        && request.resource.data.location is string
+        && request.resource.data.modality in ['REMOTO', 'HIBRIDO', 'PRESENCIAL']
+        && request.resource.data.createdAt is string;
+      allow update: if hasRole('COMPANY')
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.companyName == resource.data.companyName
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'location', 'modality', 'description', 'status'])
+        && request.resource.data.status in ['OPEN', 'CLOSED']
+        && request.resource.data.title.size() >= 2
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.description.size() >= 20
+        && request.resource.data.description.size() <= 2500;
+      allow delete: if false;
+    }
+
+    match /applications/{applicationId} {
+      allow get, list: if signedIn()
+        && (resource.data.studentId == request.auth.uid
+          || resource.data.companyId == request.auth.uid || admin());
+      allow create: if hasRole('STUDENT')
+        && hasKeys(['jobId', 'studentId', 'studentName', 'studentEmail', 'companyId', 'jobTitle', 'status', 'createdAt', 'updatedAt'])
+        && request.resource.data.studentId == request.auth.uid
+        && applicationId == request.resource.data.jobId + '_' + request.auth.uid
+        && request.resource.data.studentEmail == request.auth.token.email
+        && request.resource.data.studentName == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.name
+        && exists(/databases/$(database)/documents/jobs/$(request.resource.data.jobId))
+        && get(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data.status == 'OPEN'
+        && request.resource.data.companyId == get(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data.ownerId
+        && request.resource.data.jobTitle == get(/databases/$(database)/documents/jobs/$(request.resource.data.jobId)).data.title
+        && request.resource.data.status == 'SUBMITTED'
+        && request.resource.data.createdAt is string
+        && request.resource.data.updatedAt is string;
+      allow update: if hasRole('COMPANY')
+        && resource.data.companyId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+        && request.resource.data.status in ['REVIEWING', 'ACCEPTED', 'REJECTED']
+        && request.resource.data.updatedAt is string;
+      allow delete: if false;
+    }
+  }
+}

@@ -1,4 +1,4 @@
-import type { ApiResponse } from '~/types'
+import type { ApiResponse } from '../types'
 import { getIdToken } from 'firebase/auth'
 
 export function useApi() {
